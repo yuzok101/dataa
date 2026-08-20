@@ -384,7 +384,7 @@ white-space: nowrap;
 
 .field-course {
     position: absolute;
-    top: 51%; /* <--- השאר את האחוז שקבעת לגובה */
+    top: 52%;
     left: 16%;
     right: 16%;
     text-align: center;
@@ -393,13 +393,7 @@ white-space: nowrap;
     color: #172c72;
     line-height: 1;
     direction: rtl;
-    white-space: nowrap; /* <--- מחזירים ל-nowrap כדי שהשורה לא תישבר */
-}
-
-/* הגדרת מרווח ספציפי למילה שלפני המספר כדי לדמות טאב */
-.field-course .course-text {
-    margin-left: 50px; /* <--- שנה את ה-50px אם אתה רוצה רווח גדול או קטן יותר */
-    display: inline-block;
+    white-space: nowrap;
 }
 /*
 =========================================================
@@ -1265,8 +1259,8 @@ return value;
 
 function getCertificateTraining(cert) {
     const text = cert.training || "";
-    // הוספת Class למילה (לפני המספר)
-    return text.replace(/([\u0590-\u05FFa-zA-Z]+)/, '<span class="course-text">$1</span>');
+    // מוסיף רווח גדול (המקביל לטאב) בין המילה למספר
+    return text.replace(/([\u0590-\u05FFa-zA-Z"״'׳]+)\s*(\d+)/g, '$1\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0$2');
 }
 
 
