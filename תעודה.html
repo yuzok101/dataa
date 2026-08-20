@@ -1259,10 +1259,9 @@ return value;
 
 function getCertificateTraining(cert) {
     const text = cert.training || "";
-    // מוסיף רווח גדול (המקביל לטאב) בין המילה למספר
-    return text.replace(/([\u0590-\u05FFa-zA-Z"״'׳]+)\s*(\d+)/g, '$1\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0$2');
+    // הקטנו את הרווחים מ-6 ל-3 רווחים (ניתן להוסיף או להוריד \u00A0 לפי הצורך)
+    return text.replace(/([\u0590-\u05FFa-zA-Z"״'׳]+)\s*(\d+)/g, '$1\u00A0\u00A0\u00A0$2');
 }
-
 
 /*
 =========================================================
