@@ -580,6 +580,13 @@ onclick="sendSelectedEmails()"
 ✉️ שלח במייל
 </button>
 
+    <button
+class="btn btn-primary"
+onclick="sendSelectedToSingleEmail()"
+>
+✉️ שלח למייל ספציפי
+</button>
+    
 <button
 class="btn btn-secondary"
 onclick="window.print()"
@@ -1857,7 +1864,209 @@ alert(
 
 }
 
+/*
+=========================================================
+שליחת תעודות נבחרות לכתובת מייל יחידה
+=========================================================
+*/
 
+async function sendSelectedToSingleEmail() {
+
+const selectedIndexes =
+getSelectedIndexes();
+
+
+if (!selectedIndexes.length) {
+
+alert(
+"אנא בחר לפחות תעודה אחת לשליחה"
+);
+
+return;
+}
+
+
+const targetEmail =
+prompt(
+`נבחרו ${selectedIndexes.length} תעודות.\nהכנס את כתובת המייל אליה תרצה לשלוח אותן:`
+);
+
+
+if (!targetEmail || !targetEmail.trim()) {
+return;
+}
+
+
+const recipient =
+targetEmail.trim();
+
+
+if (
+!confirm(
+`האם לשלוח ${selectedIndexes.length} תעודות לכתובת:\n${recipient}?`
+)
+) {
+return;
+}
+
+
+showProgress(
+true,
+`מתחיל בשליחה ל-${recipient}...`,
+0
+);
+
+
+for (
+let i = 0;
+i < selectedIndexes.length;
+i++
+) {
+
+const cert =
+filteredCertificates[
+selectedIndexes[i]
+];
+
+
+const percent =
+Math.round(
+(
+(i + 1) /
+selectedIndexes.length
+) * 100
+);
+
+
+showProgress(
+true,
+`מכין ושולח תעודה של ${cert.firstName} ${cert.lastName} (${i + 1}/${selectedIndexes.length})...`,
+percent
+);
+
+
+try {
+
+const elem =
+buildCertificateElement(
+cert
+);
+
+
+document
+.getElementById(
+'certificatesContainer'
+)
+.appendChild(elem);
+
+
+const opt = {
+
+margin: 0,
+
+filename:
+`Teuda_${cert.id}.pdf`,
+
+image: {
+type: 'jpeg',
+quality: 0.95
+},
+
+html2canvas: {
+scale: 1.5,
+useCORS: true,
+backgroundColor: '#ffffff'
+},
+
+jsPDF: {
+unit: 'mm',
+format: 'a4',
+orientation: 'portrait'
+}
+
+};
+
+
+const pdfBase64 =
+await html2pdf()
+.set(opt)
+.from(elem)
+.outputPdf('datauristring');
+
+
+elem.remove();
+
+
+const base64Data =
+pdfBase64.split(',')[1];
+
+
+const formData =
+new URLSearchParams();
+
+
+formData.append(
+'action',
+'sendBatchEmail'
+);
+
+
+formData.append(
+'email',
+recipient
+);
+
+
+formData.append(
+'fullName',
+`${cert.firstName} ${cert.lastName}`
+);
+
+
+formData.append(
+'pdfData',
+base64Data
+);
+
+
+formData.append(
+'fileName',
+`Teuda_${cert.id}.pdf`
+);
+
+
+await postToAppsScript(
+formData
+);
+
+
+} catch (err) {
+
+console.error(
+`שגיאה בשליחת תעודה של ${cert.firstName} ${cert.lastName}:`,
+err
+);
+
+
+showProgress(
+true,
+`שגיאה בשליחת תעודה של ${cert.firstName} ${cert.lastName}`,
+percent
+);
+
+}
+
+}
+
+
+showProgress(false);
+
+
+alert(
+`תהליך השליחה ל-${recipient} הסתיים.`
+);
+
+}
 /*
 =========================================================
 POST ל-Google Apps Script
