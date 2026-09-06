@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">.field-name {
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ניהול והנפקת תעודות מרוכזת - יוזוק מדיק</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -300,19 +300,31 @@ page-break-after: always;
 overflow: hidden;
 }
 
+/*
+=========================================================
+שם פרטי + שם משפחה
+=========================================================
+*/
+
 .field-name {
 position: absolute;
-top: 31.9%;
+top: 34.9%;
 left: 14%;
 right: 14%;
 text-align: center;
 font-size: 31px;
 font-weight: 800;
 color: #172c72;
-line-height: 1.2;
+line-height: 1;
 direction: rtl;
-white-space: pre-wrap;
+white-space: nowrap;
 }
+
+/*
+=========================================================
+מספר תעודת זהות
+=========================================================
+*/
 
 .field-id {
 position: absolute;
@@ -328,19 +340,31 @@ line-height: 1;
 white-space: nowrap;
 }
 
+/*
+=========================================================
+הכשרה
+=========================================================
+*/
+
 .field-course {
 position: absolute;
-top: 51%;
+top: 54.2%;
 left: 16%;
 right: 16%;
 text-align: center;
 font-size: 27px;
 font-weight: 800;
 color: #172c72;
-line-height: 1.2;
+line-height: 1;
 direction: rtl;
-white-space: pre-wrap;
+white-space: nowrap;
 }
+
+/*
+=========================================================
+היקף שעות
+=========================================================
+*/
 
 .field-hours {
 position: absolute;
@@ -355,6 +379,12 @@ direction: rtl;
 line-height: 1;
 white-space: nowrap;
 }
+
+/*
+=========================================================
+תאריך הנפקה
+=========================================================
+*/
 
 .field-date {
 position: absolute;
@@ -642,6 +672,12 @@ let allCertificates = [];
 let filteredCertificates = [];
 
 
+/*
+=========================================================
+טעינת נתונים
+=========================================================
+*/
+
 function loadData() {
 
 const callbackName =
@@ -743,6 +779,12 @@ document.body.appendChild(script);
 }
 
 
+/*
+=========================================================
+אבטחת HTML
+=========================================================
+*/
+
 function escapeHtml(value) {
 
 return String(value ?? '').replace(
@@ -758,6 +800,12 @@ ch => ({
 
 }
 
+
+/*
+=========================================================
+טבלה
+=========================================================
+*/
 
 function renderTable() {
 
@@ -857,6 +905,12 @@ updateStats();
 }
 
 
+/*
+=========================================================
+חיפוש וסינון
+=========================================================
+*/
+
 function filterCertificates() {
 
 const query =
@@ -913,6 +967,12 @@ renderTable();
 
 }
 
+
+/*
+=========================================================
+בחירה
+=========================================================
+*/
 
 function toggleSelectAll(master) {
 
@@ -984,6 +1044,12 @@ c => !!c.email
 }
 
 
+/*
+=========================================================
+חישוב שעות
+=========================================================
+*/
+
 function calculateHours(trainingText) {
 
 const text =
@@ -1045,6 +1111,12 @@ return "-- שעות";
 }
 
 
+/*
+=========================================================
+תאריך הנפקה
+=========================================================
+*/
+
 function getIssueDate(cert) {
 
 const raw =
@@ -1104,12 +1176,24 @@ return value;
 }
 
 
+/*
+=========================================================
+הכשרה
+=========================================================
+*/
+
 function getCertificateTraining(cert) {
     let text = String(cert.training || "").trim();
     text = text.replace(/\s+/g, ' '); 
-    return text.replace(/([\u0590-\u05FFa-zA-Z"״'׳]+)\s*(\d+)/g, '$1\u00A0\u00A0\u00A0$2');
+    return text.split(' ').join('\u00A0');
 }
 
+
+/*
+=========================================================
+תעודות נבחרות
+=========================================================
+*/
 
 function getSelectedIndexes() {
 
@@ -1128,6 +1212,76 @@ cb.getAttribute(
 
 }
 
+
+/*
+=========================================================
+בניית תעודה (משמש לתצוגה ול-PDF)
+=========================================================
+*/
+
+function buildCertificateElement(cert) {
+
+const hours =
+calculateHours(
+cert.training
+);
+
+const training =
+getCertificateTraining(
+cert
+);
+
+const issueDate =
+getIssueDate(
+cert
+);
+
+// חיבור שם פרטי ושם משפחה ברווח מוגן
+const fullName =
+`${escapeHtml(cert.firstName)}\u00A0${escapeHtml(cert.lastName)}`;
+
+const certDiv =
+document.createElement(
+'div'
+);
+
+certDiv.className =
+'certificate-container';
+
+certDiv.innerHTML = `
+
+<div class="field-name">
+${fullName}
+</div>
+
+<div class="field-id">
+${escapeHtml(cert.id)}
+</div>
+
+<div class="field-course">
+${training}
+</div>
+
+<div class="field-hours">
+${escapeHtml(hours)}
+</div>
+
+<div class="field-date">
+${escapeHtml(issueDate)}
+</div>
+
+`;
+
+return certDiv;
+
+}
+
+
+/*
+=========================================================
+יצירת תעודות לתצוגה במסך
+=========================================================
+*/
 
 function renderSelectedCertificates() {
 
@@ -1159,63 +1313,10 @@ selectedIndexes.forEach(idx => {
 const cert =
 filteredCertificates[idx];
 
-
-const hours =
-calculateHours(
-cert.training
-);
-
-
-const training =
-getCertificateTraining(
-cert
-);
-
-
-const issueDate =
-getIssueDate(
-cert
-);
-
-
 const certDiv =
-document.createElement(
-'div'
+buildCertificateElement(
+cert
 );
-
-
-certDiv.className =
-'certificate-container';
-
-
-certDiv.innerHTML = `
-
-<div class="field-name">
-${escapeHtml(cert.firstName)} ${escapeHtml(cert.lastName)}
-</div>
-
-
-<div class="field-id">
-${escapeHtml(cert.id)}
-</div>
-
-
-<div class="field-course">
-${escapeHtml(training)}
-</div>
-
-
-<div class="field-hours">
-${escapeHtml(hours)}
-</div>
-
-
-<div class="field-date">
-${escapeHtml(issueDate)}
-</div>
-
-`;
-
 
 container.appendChild(
 certDiv
@@ -1232,69 +1333,11 @@ behavior: 'smooth'
 }
 
 
-function buildCertificateElement(cert) {
-
-const hours =
-calculateHours(
-cert.training
-);
-
-
-const training =
-getCertificateTraining(
-cert
-);
-
-
-const issueDate =
-getIssueDate(
-cert
-);
-
-
-const certDiv =
-document.createElement(
-'div'
-);
-
-
-certDiv.className =
-'certificate-container';
-
-
-certDiv.innerHTML = `
-
-<div class="field-name">
-${escapeHtml(cert.firstName)} ${escapeHtml(cert.lastName)}
-</div>
-
-
-<div class="field-id">
-${escapeHtml(cert.id)}
-</div>
-
-
-<div class="field-course">
-${escapeHtml(training)}
-</div>
-
-
-<div class="field-hours">
-${escapeHtml(hours)}
-</div>
-
-
-<div class="field-date">
-${escapeHtml(issueDate)}
-</div>
-
-`;
-
-
-return certDiv;
-
-}
-
+/*
+=========================================================
+הגדרות PDF
+=========================================================
+*/
 
 function certificatePdfOptions(cert) {
 
@@ -1333,6 +1376,12 @@ mode: [
 
 }
 
+
+/*
+=========================================================
+הורדת PDF
+=========================================================
+*/
 
 async function downloadSelectedPDFs() {
 
@@ -1427,6 +1476,12 @@ alert(
 
 }
 
+
+/*
+=========================================================
+הורדת ZIP
+=========================================================
+*/
 
 async function downloadSelectedZip() {
 
@@ -1583,6 +1638,12 @@ alert(
 
 }
 
+
+/*
+=========================================================
+שליחה מרוכזת למייל
+=========================================================
+*/
 
 async function sendSelectedEmails() {
 
@@ -1797,6 +1858,12 @@ alert(
 }
 
 
+/*
+=========================================================
+POST ל-Google Apps Script
+=========================================================
+*/
+
 function postToAppsScript(formData) {
 
 return new Promise(
@@ -1933,6 +2000,12 @@ resolve();
 }
 
 
+/*
+=========================================================
+פס התקדמות
+=========================================================
+*/
+
 function showProgress(
 show,
 statusText = '',
@@ -1972,6 +2045,12 @@ percent + '%';
 
 }
 
+
+/*
+=========================================================
+טעינה ראשונית
+=========================================================
+*/
 
 window.addEventListener(
 'load',
