@@ -1870,7 +1870,7 @@ async function sendSelectedToSingleEmail() {
     return;
   }
 
-  if (typeof JSZip === 'undefined') {
+  if (typeof JSZip === "undefined") {
     alert("ספריית ZIP לא נטענה. נסה לרענן את הדף.");
     return;
   }
@@ -1885,6 +1885,11 @@ async function sendSelectedToSingleEmail() {
 
   const recipient = targetEmail.trim();
 
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+    alert("כתובת המייל אינה תקינה.");
+    return;
+  }
+
   if (
     !confirm(
       `האם לשלוח ${selectedIndexes.length} תעודות בתוך קובץ ZIP אחד לכתובת:\n${recipient}?`
@@ -1893,77 +1898,174 @@ async function sendSelectedToSingleEmail() {
     return;
   }
 
-  showProgress(true, `מכין תעודות לדחיסה...`, 0);
+  showProgress(true, "מכין תעודות לדחיסה...", 0);
 
   const zip = new JSZip();
-
-  for (let i = 0; i < selectedIndexes.length; i++) {
-    const cert = filteredCertificates[selectedIndexes[i]];
-    const percent = Math.round(((i + 1) / selectedIndexes.length) * 70);
-
-    showProgress(
-      true,
-      `מכין תעודה של ${cert.firstName} ${cert.lastName} (${i + 1}/${selectedIndexes.length})...`,
-      percent
-    );
-
-    try {
-      const elem = buildCertificateElement(cert);
-      document.getElementById('certificatesContainer').appendChild(elem);
-
-      const opt = {
-        margin: 0,
-        filename: `Teuda_${cert.id}.pdf`,
-        image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-
-      const pdfBlob = await html2pdf().set(opt).from(elem).outputPdf('blob');
-      elem.remove();
-
-      zip.file(
-        `תעודה_${cert.firstName}_${cert.lastName}_${cert.id}.pdf`,
-        pdfBlob
-      );
-
-    } catch (err) {
-      console.error(`שגיאה בהכנת תעודה של ${cert.firstName} ${cert.lastName}:`, err);
-    }
-  }
-
-  showProgress(true, `דוחס קובץ ZIP...`, 75);
+  let addedCertificates = 0;
 
   try {
-    const zipBase64 = await zip.generateAsync(
-      { type: 'base64' },
+    for (let i = 0; i < selectedIndexes.length; i++) {
+      const cert = filteredCertificates[selectedIndexes[i]];
+      const percent = Math.round(((i + 1) / selectedIndexes.length) * 65);
+
+      showProgress(
+        true,
+        `מכין תעודה של ${cert.firstName} ${cert.lastName} (${i + 1}/${selectedIndexes.length})...`,
+        percent
+      );
+
+      const elem = buildCertificateElement(cert);
+      document.getElementById("certificatesContainer").appendChild(elem);
+
+      try {
+        const opt = certificatePdfOptions(cert);
+
+        const pdfBlob = await html2pdf()
+          .set(opt)
+          .from(elem)
+          .outputPdf("blob");
+
+        if (!pdfBlob || !pdfBlob.size) {
+          throw new Error("נוצר PDF ריק.");
+        }
+
+        const safeName = `Teuda_${cert.id || i + 1}.pdf`;
+
+        zip.file(safeName, pdfBlob);
+        addedCertificates++;
+
+      } finally {
+        elem.remove();
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    if (!addedCertificates) {
+      throw new Error("לא נוצרה אף תעודה בתוך ה-ZIP.");
+    }
+
+    showProgress(true, "דוחס קובץ ZIP...", 70);
+
+    const zipBlob = await zip.generateAsync(
+      {
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: {
+          level: 6
+        }
+      },
       meta => {
-        const zipPercent = 75 + Math.round((meta.percent / 100) * 15);
-        showProgress(true, `דוחס ZIP... ${Math.round(meta.percent)}%`, zipPercent);
+        const percent = 70 + Math.round((meta.percent / 100) * 15);
+        showProgress(
+          true,
+          `דוחס ZIP... ${Math.round(meta.percent)}%`,
+          percent
+        );
       }
     );
 
-    const zipFileName = `תעודות_יוזוק_מדיק_${new Date().toISOString().slice(0, 10)}.zip`;
+    if (!zipBlob || !zipBlob.size) {
+      throw new Error("נוצר ZIP ריק.");
+    }
 
-    showProgress(true, `שולח מייל עם קובץ ZIP ל-${recipient}...`, 90);
+    // המרה ל-Base64 בצורה יציבה
+    showProgress(true, "מכין את קובץ ה-ZIP לשליחה...", 88);
+
+    const zipBase64 = await blobToBase64(zipBlob);
+
+    if (!zipBase64) {
+      throw new Error("לא הצלחנו להמיר את ה-ZIP ל-Base64.");
+    }
+
+    const zipFileName =
+      `תעודות_יוזוק_מדיק_${new Date().toISOString().slice(0, 10)}.zip`;
+
+    showProgress(
+      true,
+      `שולח מייל עם ZIP ל-${recipient}...`,
+      92
+    );
 
     const formData = new URLSearchParams();
-    formData.append('action', 'sendZipEmail');
-    formData.append('email', recipient);
-    formData.append('zipData', zipBase64);
-    formData.append('fileName', zipFileName);
+
+    formData.append("action", "sendZipEmail");
+    formData.append("email", recipient);
+    formData.append("zipData", zipBase64);
+    formData.append("fileName", zipFileName);
+    formData.append(
+      "certificateCount",
+      String(addedCertificates)
+    );
 
     await postToAppsScript(formData);
 
-    showProgress(true, `השליחה הושלמה בהצלחה!`, 100);
-    setTimeout(() => showProgress(false), 1500);
+    showProgress(
+      true,
+      "השליחה הושלמה בהצלחה!",
+      100
+    );
 
-    alert(`נשלח מייל בהצלחה עם קובץ ZIP המכיל ${selectedIndexes.length} תעודות ל-${recipient}.`);
+    setTimeout(() => {
+      showProgress(false);
+    }, 1500);
+
+    alert(
+      `נשלח מייל בהצלחה עם קובץ ZIP המכיל ${addedCertificates} תעודות ל-${recipient}.`
+    );
+
   } catch (err) {
     console.error("שגיאה בשליחת קובץ ה-ZIP:", err);
+
     showProgress(false);
-    alert("אירעה שגיאה בזמן יצירת או שליחת קובץ ה-ZIP.");
+
+    alert(
+      "אירעה שגיאה בזמן יצירת או שליחת קובץ ה-ZIP.\n\n" +
+      (err && err.message ? err.message : "")
+    );
   }
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onloadend = function () {
+      try {
+        const result = reader.result;
+
+        if (!result || typeof result !== "string") {
+          reject(new Error("לא התקבל מידע מה-ZIP."));
+          return;
+        }
+
+        const commaIndex = result.indexOf(",");
+
+        if (commaIndex === -1) {
+          reject(new Error("פורמט Base64 לא תקין."));
+          return;
+        }
+
+        const base64 = result.substring(commaIndex + 1);
+
+        if (!base64) {
+          reject(new Error("קובץ ה-ZIP ריק."));
+          return;
+        }
+
+        resolve(base64);
+
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    reader.onerror = function () {
+      reject(new Error("שגיאה בקריאת קובץ ה-ZIP."));
+    };
+
+    reader.readAsDataURL(blob);
+  });
 }
 
 /*
@@ -1973,140 +2075,97 @@ POST ל-Google Apps Script
 */
 
 function postToAppsScript(formData) {
+  return new Promise((resolve, reject) => {
+    const iframeName = "gasPostFrame_" + Date.now();
 
-return new Promise(
-(resolve) => {
+    const iframe = document.createElement("iframe");
+    iframe.name = iframeName;
+    iframe.style.display = "none";
 
-const iframeName =
-'gasPostFrame_' +
-Date.now();
+    document.body.appendChild(iframe);
 
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = scriptURL;
+    form.target = iframeName;
+    form.style.display = "none";
+    form.enctype = "application/x-www-form-urlencoded";
 
-const iframe =
-document.createElement(
-'iframe'
-);
+    for (const [key, value] of formData.entries()) {
+      const input = document.createElement("input");
 
+      input.type = "hidden";
+      input.name = key;
+      input.value = value;
 
-iframe.name =
-iframeName;
+      form.appendChild(input);
+    }
 
+    document.body.appendChild(form);
 
-iframe.style.display =
-'none';
+    let finished = false;
 
+    const cleanup = () => {
+      if (form.parentNode) {
+        form.parentNode.removeChild(form);
+      }
 
-document.body.appendChild(
-iframe
-);
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+    };
 
+    const finishSuccess = () => {
+      if (finished) return;
 
-const form =
-document.createElement(
-'form'
-);
+      finished = true;
 
+      cleanup();
+      resolve();
+    };
 
-form.method =
-'POST';
+    const finishError = (error) => {
+      if (finished) return;
 
+      finished = true;
 
-form.action =
-scriptURL;
+      cleanup();
+      reject(error);
+    };
 
+    iframe.onload = function () {
+      // Apps Script מחזיר redirect/HTML בתוך ה-iframe.
+      // עצם ה-load אומר שהבקשה הסתיימה מבחינת הדפדפן.
+      setTimeout(() => {
+        finishSuccess();
+      }, 700);
+    };
 
-form.target =
-iframeName;
+    iframe.onerror = function () {
+      finishError(
+        new Error("Google Apps Script לא קיבל את בקשת השליחה.")
+      );
+    };
 
+    try {
+      form.submit();
+    } catch (error) {
+      finishError(error);
+      return;
+    }
 
-form.style.display =
-'none';
-
-
-for (
-const [key, value]
-of formData.entries()
-) {
-
-const input =
-document.createElement(
-'input'
-);
-
-
-input.type =
-'hidden';
-
-
-input.name =
-key;
-
-
-input.value =
-value;
-
-
-form.appendChild(
-input
-);
-
+    // זמן המתנה ארוך יותר עבור ZIP גדול.
+    setTimeout(() => {
+      if (!finished) {
+        finishError(
+          new Error(
+            "השליחה ל-Google Apps Script ארכה יותר מדי זמן."
+          )
+        );
+      }
+    }, 60000);
+  });
 }
-
-
-document.body.appendChild(
-form
-);
-
-
-iframe.onload =
-function() {
-
-setTimeout(
-() => {
-
-form.remove();
-iframe.remove();
-
-resolve();
-
-},
-300
-);
-
-};
-
-
-form.submit();
-
-
-setTimeout(
-() => {
-
-if (
-document.body.contains(form)
-) {
-form.remove();
-}
-
-
-if (
-document.body.contains(iframe)
-) {
-iframe.remove();
-}
-
-
-resolve();
-
-},
-15000
-);
-
-}
-);
-
-}
-
 
 /*
 =========================================================
