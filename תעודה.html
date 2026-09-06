@@ -1859,7 +1859,7 @@ alert(
 
 /*
 =========================================================
-שליחת תעודות נבחרות לכתובת מייל יחידה (כל התעודות במייל אחד)
+שליחת תעודות נבחרות לכתובת מייל יחידה בקובץ ZIP אחד
 =========================================================
 */
 async function sendSelectedToSingleEmail() {
@@ -1867,6 +1867,11 @@ async function sendSelectedToSingleEmail() {
 
   if (!selectedIndexes.length) {
     alert("אנא בחר לפחות תעודה אחת לשליחה");
+    return;
+  }
+
+  if (typeof JSZip === 'undefined') {
+    alert("ספריית ZIP לא נטענה. נסה לרענן את הדף.");
     return;
   }
 
@@ -1882,19 +1887,19 @@ async function sendSelectedToSingleEmail() {
 
   if (
     !confirm(
-      `האם לשלוח ${selectedIndexes.length} תעודות בתוך מייל אחד מרוכז לכתובת:\n${recipient}?`
+      `האם לשלוח ${selectedIndexes.length} תעודות בתוך קובץ ZIP אחד לכתובת:\n${recipient}?`
     )
   ) {
     return;
   }
 
-  showProgress(true, `מכין תעודות לשליחה מרוכזת...`, 0);
+  showProgress(true, `מכין תעודות לדחיסה...`, 0);
 
-  const attachments = [];
+  const zip = new JSZip();
 
   for (let i = 0; i < selectedIndexes.length; i++) {
     const cert = filteredCertificates[selectedIndexes[i]];
-    const percent = Math.round(((i + 1) / selectedIndexes.length) * 80);
+    const percent = Math.round(((i + 1) / selectedIndexes.length) * 70);
 
     showProgress(
       true,
@@ -1914,45 +1919,50 @@ async function sendSelectedToSingleEmail() {
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
 
-      const pdfBase64 = await html2pdf().set(opt).from(elem).outputPdf('datauristring');
+      const pdfBlob = await html2pdf().set(opt).from(elem).outputPdf('blob');
       elem.remove();
 
-      const base64Data = pdfBase64.split(',')[1];
-
-      attachments.push({
-        fileName: `תעודה_${cert.firstName}_${cert.lastName}_${cert.id}.pdf`,
-        pdfData: base64Data
-      });
+      zip.file(
+        `תעודה_${cert.firstName}_${cert.lastName}_${cert.id}.pdf`,
+        pdfBlob
+      );
 
     } catch (err) {
       console.error(`שגיאה בהכנת תעודה של ${cert.firstName} ${cert.lastName}:`, err);
     }
   }
 
-  if (attachments.length === 0) {
-    showProgress(false);
-    alert("נכשל בהכנת התעודות לשליחה.");
-    return;
-  }
-
-  showProgress(true, `שולח מייל מרוכז עם ${attachments.length} תעודות ל-${recipient}...`, 90);
+  showProgress(true, `דוחס קובץ ZIP...`, 75);
 
   try {
+    const zipBase64 = await zip.generateAsync(
+      { type: 'base64' },
+      meta => {
+        const zipPercent = 75 + Math.round((meta.percent / 100) * 15);
+        showProgress(true, `דוחס ZIP... ${Math.round(meta.percent)}%`, zipPercent);
+      }
+    );
+
+    const zipFileName = `תעודות_יוזוק_מדיק_${new Date().toISOString().slice(0, 10)}.zip`;
+
+    showProgress(true, `שולח מייל עם קובץ ZIP ל-${recipient}...`, 90);
+
     const formData = new URLSearchParams();
-    formData.append('action', 'sendBulkAttachmentsEmail');
+    formData.append('action', 'sendZipEmail');
     formData.append('email', recipient);
-    formData.append('attachments', JSON.stringify(attachments));
+    formData.append('zipData', zipBase64);
+    formData.append('fileName', zipFileName);
 
     await postToAppsScript(formData);
 
     showProgress(true, `השליחה הושלמה בהצלחה!`, 100);
     setTimeout(() => showProgress(false), 1500);
 
-    alert(`נשלח מייל מרוכז אחד עם ${attachments.length} תעודות נפרדות ל-${recipient}.`);
+    alert(`נשלח מייל בהצלחה עם קובץ ZIP המכיל ${selectedIndexes.length} תעודות ל-${recipient}.`);
   } catch (err) {
-    console.error("שגיאה בשליחת המייל המרוכז:", err);
+    console.error("שגיאה בשליחת קובץ ה-ZIP:", err);
     showProgress(false);
-    alert("אירעה שגיאה בזמן שליחת המייל המרוכז.");
+    alert("אירעה שגיאה בזמן יצירת או שליחת קובץ ה-ZIP.");
   }
 }
 
